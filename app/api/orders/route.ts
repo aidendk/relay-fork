@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
         const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
         const limit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') || String(PAGE_SIZE), 10) || PAGE_SIZE));
         const search = (searchParams.get('search') || '').trim();
+        const subteam = (searchParams.get('subteam') || '').trim();
         const query = search.toLowerCase();
         const orderStatuses = (Object.values(OrderStatus) as OrderStatus[]).filter((status) =>
             status.toLowerCase().includes(query)
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
 
         const baseWhere: Prisma.OrderWhereInput = {
             NOT: { status: { in: ['ARCHIVED', 'EV_ARCHIVED', 'AWAITING_APPROVAL'] } },
+            ...(subteam ? { subteam: { equals: subteam, mode: 'insensitive' } } : {}),
         };
 
         const where: Prisma.OrderWhereInput = search

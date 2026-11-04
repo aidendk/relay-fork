@@ -80,6 +80,33 @@ h1.purchaseHeader{
     border-color: #7044F2;
 }
 
+.subteamFilter {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: #F8F9FB;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23545360' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    color: #545360;
+    border: 1px solid #d8d9de;
+    border-radius: 10px;
+    padding: 1rem 2.5rem 1rem 1.5rem;
+    font-size: .9rem;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.subteamFilter:hover {
+    background-color: #eceef2;
+    border-color: #d1d3d8;
+}
+
+.subteamFilter:focus {
+    outline: none;
+    border-color: #7044F2;
+}
+
 button.orderButton{
     background-color: #7044F2;
     color: white;
@@ -479,6 +506,14 @@ button.orderButton:hover{
     .searchBar:focus {
         border-color: #7044F2;
         box-shadow: 0 0 0 3px rgba(112, 68, 242, 0.08);
+    }
+
+    .subteamFilter {
+        width: 100%;
+        height: 44px;
+        padding: 0 2.5rem 0 14px;
+        font-size: 0.85rem;
+        font-weight: 500;
     }
 
     .myOrdersButton {

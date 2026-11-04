@@ -85,6 +85,14 @@ export interface SerializedItemsWithRelations {
 
 const PAGE_SIZE = 15;
 
+const SUBTEAMS = [
+    "AERODYNAMICS", "BATTERY", "CHASSIS", "ELECTRONICS", "POWERTRAIN", "SUSPENSION",
+    "DISTRIBUTED BMS", "SOFTWARE", "VEHICLE DYNAMICS", "FINANCE", "OPERATIONS", "MARKETING",
+];
+
+const toTitleCase = (value: string) =>
+    value.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bBms\b/, 'BMS');
+
 const STATUS_CLASS: Partial<Record<OrderStatus, string>> = {
     TO_ORDER: styles.orderStatusToOrder,
     PLACED: styles.orderStatusPlaced, MEEN_PLACED: styles.orderStatusPlaced,
@@ -118,6 +126,7 @@ const OrderTable: React.FC = () => {
     const [expandedOrderIds, setExpandedOrderIds] = useState<number[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [subteamFilter, setSubteamFilter] = useState('');
     const [showOrderForm, setShowOrderForm] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<SerializedOrderWithRelations | null>(null);
     const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
@@ -143,9 +152,14 @@ const OrderTable: React.FC = () => {
         return () => clearTimeout(debounceRef.current);
     }, [searchQuery]);
 
-    const apiUrl = debouncedSearch
-        ? `/api/orders?limit=${PAGE_SIZE}&offset=0&search=${encodeURIComponent(debouncedSearch)}`
-        : `/api/orders?limit=${PAGE_SIZE}&offset=0`;
+    const buildOrdersUrl = useCallback((offset: number) => {
+        const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+        if (debouncedSearch) params.set('search', debouncedSearch);
+        if (subteamFilter) params.set('subteam', subteamFilter);
+        return `/api/orders?${params}`;
+    }, [debouncedSearch, subteamFilter]);
+
+    const apiUrl = buildOrdersUrl(0);
 
     const { data, error } = useSWR(apiUrl, fetcher, { refreshInterval: 60000 });
 
@@ -170,10 +184,7 @@ const OrderTable: React.FC = () => {
         const nextOffset = firstPageOrders.length + extraPages.flat().length;
         setLoadingMore(true);
         try {
-            const url = debouncedSearch
-                ? `/api/orders?limit=${PAGE_SIZE}&offset=${nextOffset}&search=${encodeURIComponent(debouncedSearch)}`
-                : `/api/orders?limit=${PAGE_SIZE}&offset=${nextOffset}`;
-            const res = await fetch(url);
+            const res = await fetch(buildOrdersUrl(nextOffset));
             const json = await res.json();
             setExtraPages(prev => [...prev, json.orders]);
             setHasMore(json.hasMore ?? false);
@@ -182,7 +193,7 @@ const OrderTable: React.FC = () => {
         } finally {
             setLoadingMore(false);
         }
-    }, [firstPageOrders.length, extraPages, debouncedSearch]);
+    }, [firstPageOrders.length, extraPages, buildOrdersUrl]);
 
     const refreshAllPages = useCallback(() => {
         // Re-fetch the first page via SWR
@@ -364,6 +375,20 @@ const OrderTable: React.FC = () => {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={styles.searchBar}
                     />
+                    <select
+                        value={subteamFilter}
+                        onChange={(e) => {
+                            setSubteamFilter(e.target.value);
+                            setExtraPages([]);
+                        }}
+                        className={styles.subteamFilter}
+                        aria-label="Filter by subteam"
+                    >
+                        <option value="">All Subteams</option>
+                        {SUBTEAMS.map((subteam) => (
+                            <option key={subteam} value={subteam}>{toTitleCase(subteam)}</option>
+                        ))}
+                    </select>
                     <button
                         className={styles.myOrdersButton}
                         onClick={handleMyOrders}
