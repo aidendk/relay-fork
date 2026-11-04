@@ -127,6 +127,8 @@ const OrderTable: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [subteamFilter, setSubteamFilter] = useState('');
+    const [showSubteamMenu, setShowSubteamMenu] = useState(false);
+    const subteamMenuRef = useRef<HTMLDivElement>(null);
     const [showOrderForm, setShowOrderForm] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<SerializedOrderWithRelations | null>(null);
     const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
@@ -142,6 +144,29 @@ const OrderTable: React.FC = () => {
     const { data: session } = useSession();
     const { toast } = useToast();
     const currentUserSubteam = session?.user?.subteam ?? "";
+
+    // Close the subteam menu on outside click or Escape
+    useEffect(() => {
+        if (!showSubteamMenu) return;
+        const handleClick = (e: MouseEvent) => {
+            if (!subteamMenuRef.current?.contains(e.target as Node)) setShowSubteamMenu(false);
+        };
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setShowSubteamMenu(false);
+        };
+        document.addEventListener('mousedown', handleClick);
+        document.addEventListener('keydown', handleKey);
+        return () => {
+            document.removeEventListener('mousedown', handleClick);
+            document.removeEventListener('keydown', handleKey);
+        };
+    }, [showSubteamMenu]);
+
+    const selectSubteam = (subteam: string) => {
+        setSubteamFilter(subteam);
+        setExtraPages([]);
+        setShowSubteamMenu(false);
+    };
 
     // Debounce search input
     useEffect(() => {
@@ -375,20 +400,37 @@ const OrderTable: React.FC = () => {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={styles.searchBar}
                     />
-                    <select
-                        value={subteamFilter}
-                        onChange={(e) => {
-                            setSubteamFilter(e.target.value);
-                            setExtraPages([]);
-                        }}
-                        className={styles.subteamFilter}
-                        aria-label="Filter by subteam"
-                    >
-                        <option value="">All Subteams</option>
-                        {SUBTEAMS.map((subteam) => (
-                            <option key={subteam} value={subteam}>{toTitleCase(subteam)}</option>
-                        ))}
-                    </select>
+                    <div className={styles.subteamDropdown} ref={subteamMenuRef}>
+                        <button
+                            type="button"
+                            className={`${styles.subteamFilter} ${showSubteamMenu ? styles.subteamFilterOpen : ''}`}
+                            onClick={() => setShowSubteamMenu((open) => !open)}
+                            aria-haspopup="listbox"
+                            aria-expanded={showSubteamMenu}
+                            aria-label="Filter by subteam"
+                        >
+                            {subteamFilter ? toTitleCase(subteamFilter) : 'All Subteams'}
+                        </button>
+                        {showSubteamMenu && (
+                            <ul className={styles.subteamMenu} role="listbox" aria-label="Subteams">
+                                {['', ...SUBTEAMS].map((subteam) => {
+                                    const selected = subteam === subteamFilter;
+                                    return (
+                                        <li key={subteam || 'all'} role="option" aria-selected={selected}>
+                                            <button
+                                                type="button"
+                                                className={`${styles.subteamOption} ${selected ? styles.subteamOptionSelected : ''}`}
+                                                onClick={() => selectSubteam(subteam)}
+                                            >
+                                                {subteam ? toTitleCase(subteam) : 'All Subteams'}
+                                                {selected && <Check size={14} />}
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+                    </div>
                     <button
                         className={styles.myOrdersButton}
                         onClick={handleMyOrders}

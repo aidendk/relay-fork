@@ -62,7 +62,7 @@ h1.purchaseHeader{
 .searchBar {
     border: 1px solid #D4D4D4;
     padding: 0.75rem 1rem;
-    border-radius: 5px;
+    border-radius: 10px;
     font-size: 0.9rem;
     color: #333;
     background-color: #fff;
@@ -80,9 +80,16 @@ h1.purchaseHeader{
     border-color: #7044F2;
 }
 
+.subteamDropdown {
+    position: relative;
+}
+
 .subteamFilter {
     appearance: none;
     -webkit-appearance: none;
+    min-width: 11rem;
+    height: 100%;
+    text-align: left;
     background-color: #F8F9FB;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23545360' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
@@ -102,9 +109,59 @@ h1.purchaseHeader{
     border-color: #d1d3d8;
 }
 
-.subteamFilter:focus {
+.subteamFilter:focus-visible,
+.subteamFilterOpen {
     outline: none;
     border-color: #7044F2;
+}
+
+.subteamFilterOpen {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='%23545360' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.subteamMenu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    min-width: 100%;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background-color: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(17, 24, 39, 0.12);
+    box-sizing: border-box;
+}
+
+.subteamOption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: #374151;
+    font-size: .9rem;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.subteamOption:hover,
+.subteamOption:focus-visible {
+    outline: none;
+    background-color: #F3F4F6;
+}
+
+.subteamOptionSelected {
+    color: #7044F2;
+    font-weight: 500;
+    background-color: #F3EFFE;
 }
 
 button.orderButton{
@@ -506,6 +563,10 @@ button.orderButton:hover{
     .searchBar:focus {
         border-color: #7044F2;
         box-shadow: 0 0 0 3px rgba(112, 68, 242, 0.08);
+    }
+
+    .subteamDropdown {
+        width: 100%;
     }
 
     .subteamFilter {
