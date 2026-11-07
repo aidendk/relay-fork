@@ -1,16 +1,20 @@
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../lib/prisma';
-import { BUDGET_START_DATE } from '../../lib/budget-config';
+import { CURRENT_CAR_YEAR, isCarYear } from '../../lib/car-year';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const carYearParam = request.nextUrl.searchParams.get('carYear');
+  if (carYearParam !== null && !isCarYear(carYearParam)) {
+    return NextResponse.json({ error: `Invalid car year: ${carYearParam}` }, { status: 400 });
+  }
+  const carYear = carYearParam ?? CURRENT_CAR_YEAR;
+
   try {
     const orders = await prisma.order.findMany({
       where: {
-        createdAt: {
-            gte: new Date(BUDGET_START_DATE),
-        },
+        carYear,
         NOT: {
           status: { in: ['AWAITING_APPROVAL', 'AWAITING_RAVI_APPROVAL'] },
         },
@@ -35,6 +39,8 @@ export async function GET() {
         updatedAt: true,
         deliveryLocation: true,
         deliveryPhotoUrl: true,
+        carYear: true,
+        trouble: true,
         user: {
           select: { id: true, name: true, email: true, subteam: true, role: true },
         },
@@ -69,7 +75,7 @@ export async function GET() {
         : null,
     }));
 
-    const response = NextResponse.json({ orders: serializedOrders });
+    const response = NextResponse.json({ carYear, orders: serializedOrders });
     response.headers.set('Cache-Control', 'no-store');
     return response;
   } catch (error) {

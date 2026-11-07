@@ -8,6 +8,9 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// Season runs June to May and is named after the car: June 2026 – May 2027 is AME27.
+const carYearFor = (d: Date) => `AME${(d.getUTCFullYear() % 100) + (d.getUTCMonth() >= 5 ? 1 : 0)}`;
+
 const PREFIX = 'SEED-HOME-';
 
 // Full subteam name -> cost breakdown code (matches normalizeSubteam in app/lib/budget-config.ts)
@@ -117,6 +120,7 @@ async function main() {
           costBreakdown: { [SUBTEAMS[user.subteam].code]: 100 },
           deliveryLocation: pick(DELIVERY_LOCATIONS),
           createdAt,
+          carYear: carYearFor(createdAt),
           items: {
             create: [
               {

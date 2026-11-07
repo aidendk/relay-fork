@@ -113,7 +113,7 @@ const ArchiveTable: React.FC = () => {
 
     const updateOrderInState = () => {
         mutate('/api/orders/archived');
-        mutate('/api/finance');
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
     };
 
     const toggleExpand = (orderId: number, orderItems: SerializedOrderWithRelations['items'], orderUrl: string | null) => {

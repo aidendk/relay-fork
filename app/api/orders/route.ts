@@ -26,6 +26,8 @@ const orderSelect = {
     updatedAt: true,
     deliveryLocation: true,
     deliveryPhotoUrl: true,
+    carYear: true,
+    trouble: true,
     user: {
         select: {
             id: true,
@@ -83,6 +85,10 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') || String(PAGE_SIZE), 10) || PAGE_SIZE));
         const search = (searchParams.get('search') || '').trim();
         const subteam = (searchParams.get('subteam') || '').trim();
+        const statusFilter = (searchParams.get('status') || '')
+            .split(',')
+            .filter((s): s is OrderStatus => (Object.values(OrderStatus) as string[]).includes(s));
+        const troubleOnly = searchParams.get('trouble') === '1';
         const query = search.toLowerCase();
         const orderStatuses = (Object.values(OrderStatus) as OrderStatus[]).filter((status) =>
             status.toLowerCase().includes(query)
@@ -91,9 +97,15 @@ export async function GET(request: NextRequest) {
             status.toLowerCase().includes(query)
         );
 
-        const baseWhere: Prisma.OrderWhereInput = {
+        const activeWhere: Prisma.OrderWhereInput = {
             NOT: { status: { in: ['ARCHIVED', 'EV_ARCHIVED', 'AWAITING_APPROVAL'] } },
+        };
+
+        const baseWhere: Prisma.OrderWhereInput = {
+            ...activeWhere,
             ...(subteam ? { subteam: { equals: subteam, mode: 'insensitive' } } : {}),
+            ...(statusFilter.length ? { status: { in: statusFilter } } : {}),
+            ...(troubleOnly ? { trouble: true } : {}),
         };
 
         const where: Prisma.OrderWhereInput = search
@@ -117,7 +129,7 @@ export async function GET(request: NextRequest) {
             }
             : baseWhere;
 
-        const [orders, total] = await Promise.all([
+        const [orders, total, troubleCount, statusGroups] = await Promise.all([
             prisma.order.findMany({
                 where,
                 select: orderSelect,
@@ -126,11 +138,16 @@ export async function GET(request: NextRequest) {
                 take: limit,
             }),
             prisma.order.count({ where }),
+            prisma.order.count({ where: { ...activeWhere, trouble: true } }),
+            prisma.order.groupBy({ by: ['status'], where: activeWhere, _count: { _all: true } }),
         ]);
+        const statusCounts = Object.fromEntries(statusGroups.map((g) => [g.status, g._count._all]));
 
         const response = NextResponse.json({
             orders: serialize(orders),
             total,
+            troubleCount,
+            statusCounts,
             hasMore: offset + orders.length < total,
         });
         response.headers.set('Cache-Control', 'no-store');

@@ -8,6 +8,7 @@ import { useSession } from 'next-auth/react';
 import * as XLSX from 'xlsx';
 import { Download, FileText, Trash2, Upload, X } from 'lucide-react';
 import { checkAdmin, checkLead } from '../../lib/checkAdmin';
+import { CAR_YEARS } from '../../lib/car-year';
 
 interface SettingsMenuProps {
     order: SerializedOrderWithRelations | null;
@@ -32,6 +33,8 @@ interface UpdateOrderBody {
     meenOrderId?: string;
     comments?: string;
     costBreakdown?: { [key: string]: number };
+    carYear?: string;
+    trouble?: boolean;
 }
 
 interface UpdateItemBody {
@@ -133,6 +136,8 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ order, item, onClose, onUpd
     const [trackingId, setTrackingId] = useState<string>(order?.trackingId || '');
     const [meenOrderId, setMeenOrderId] = useState<string>(order?.meenOrderId || '');
     const [isPriceVerified, setIsPriceVerified] = useState(order ? order.costVerified : false);
+    const [carYear, setCarYear] = useState<string>(order?.carYear || '');
+    const [trouble, setTrouble] = useState<boolean>(order?.trouble ?? false);
 
     const canEdit = isAdmin || isLead;
     const userSubteam = session?.user.subteam;
@@ -241,6 +246,8 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ order, item, onClose, onUpd
                 }
                 if (canEdit) {
                     body.costBreakdown = costBreakdown;
+                    body.carYear = carYear;
+                    body.trouble = trouble;
                 }
 
                 const response = await fetch(`/api/orders/update/${order.id}`, {
@@ -527,7 +534,29 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ order, item, onClose, onUpd
                                             <label htmlFor="tracking-id">Tracking ID</label>
                                             <input id="tracking-id" type="text" value={trackingId} onChange={handleTrackingIdChange} placeholder={carrier ? '' : 'Pick a carrier first'} />
                                         </div>
+                                        <div className={styles.field}>
+                                            <label htmlFor="car-year">Car</label>
+                                            <select id="car-year" value={carYear} onChange={(e) => setCarYear(e.target.value)}>
+                                                {/* Keep an out-of-range value selectable so saving never rewrites it */}
+                                                {!CAR_YEARS.includes(carYear) && <option value={carYear}>{carYear}</option>}
+                                                {CAR_YEARS.map((year) => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className={styles.field}>
+                                            <span className={styles.fieldLabel}>Trouble</span>
+                                            <label className={`${styles.troubleToggle} ${trouble ? styles.troubleToggleOn : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={trouble}
+                                                    onChange={(e) => setTrouble(e.target.checked)}
+                                                />
+                                                {trouble ? 'Flagged as trouble' : 'Flag as trouble'}
+                                            </label>
+                                        </div>
                                     </div>
+                                    <p className={styles.fieldHint}>Flag an order as trouble when it has gone a long time with no update. Its row turns red on the home screen.</p>
                                 </section>
                             ) : (
                                 <section className={styles.section}>
@@ -536,6 +565,14 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ order, item, onClose, onUpd
                                         <dd>{statusLabel(order.status)}</dd>
                                         <dt>Tracking</dt>
                                         <dd>{order.trackingId ? `${order.carrier ?? ''} ${order.trackingId}`.trim() : <span className={styles.dash}>—</span>}</dd>
+                                        <dt>Car</dt>
+                                        <dd>{order.carYear}</dd>
+                                        {order.trouble && (
+                                            <>
+                                                <dt>Trouble</dt>
+                                                <dd className={styles.troubleText}>Flagged: no update in a long time</dd>
+                                            </>
+                                        )}
                                     </dl>
                                 </section>
                             )}

@@ -938,3 +938,185 @@ button.orderButton:hover{
         padding: 0 10px;
     }
 }
+/* ===== TROUBLE FLAG ===== */
+.tableBody tr.troubleRow {
+    background-color: rgba(222, 60, 75, 0.08);
+    box-shadow: inset 4px 0 0 #DE3C4B;
+}
+
+.tableBody tr.troubleRow:hover {
+    background-color: rgba(222, 60, 75, 0.13);
+}
+
+.tableBody tr.troubleRow .tdText,
+.tableBody tr.troubleRow .nameColumn,
+.tableBody tr.troubleRow .textColumn {
+    color: #A61B29;
+}
+
+.troubleIcon {
+    color: #C62F3E;
+    vertical-align: -2px;
+    margin-right: 6px;
+}
+
+.troubleFilter {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.troubleCount {
+    min-width: 1.25rem;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background-color: #E5E7EB;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.troubleFilterOn,
+.troubleFilterOn:hover {
+    color: #C62F3E;
+    background-color: rgba(222, 60, 75, 0.1);
+    border-color: #DE3C4B;
+}
+
+.troubleFilterOn .troubleCount {
+    color: #fff;
+    background-color: #DE3C4B;
+}
+
+/* ===== STATUS FILTER / GROUPING ===== */
+.tableBody .statusHeader {
+    overflow: visible;
+}
+
+.statusHeaderDropdown {
+    display: inline-block;
+}
+
+.statusHeaderButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.statusHeaderButton:hover {
+    background-color: #E9EAEE;
+}
+
+.statusHeaderButton:focus-visible {
+    outline: none;
+    border-color: #7044F2;
+}
+
+.statusHeaderButtonActive {
+    color: #7044F2;
+    font-weight: 500;
+    background-color: #F3EFFE;
+    border-color: #DCD2FC;
+}
+
+.statusMenu {
+    min-width: 15rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    text-align: left;
+    font-weight: normal;
+}
+
+.statusMenu .subteamOption {
+    justify-content: flex-start;
+}
+
+.statusDot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    border: 2px solid currentColor;
+    box-sizing: border-box;
+}
+
+.statusOptionLabel {
+    flex: 1;
+}
+
+.statusOptionCount {
+    color: #6B7280;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.statusOptionCheck {
+    display: inline-flex;
+    width: 14px;
+}
+
+.statusOptionEmpty {
+    color: #9CA3AF;
+}
+
+.tableBody tr.groupRow td {
+    padding: 18px 10px 8px;
+    background-color: #fff;
+    border-bottom: 1px solid #E5E7EB;
+    text-align: left;
+}
+
+.groupCount {
+    margin-left: 10px;
+    color: #6B7280;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.mobileStatusDropdown {
+    display: none;
+}
+
+.mobileGroupHeader {
+    display: flex;
+    align-items: center;
+    padding: 10px 2px 0;
+}
+
+@media screen and (max-width: 768px) {
+    .mobileStatusDropdown {
+        display: block;
+    }
+
+    .mobileCardTrouble {
+        background-color: #FDF1F2;
+        box-shadow: inset 4px 0 0 #DE3C4B, 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .mobileTroubleTag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        width: fit-content;
+        color: #C62F3E;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .troubleFilter {
+        flex: 1;
+        justify-content: center;
+    }
+}

@@ -74,7 +74,7 @@ const ApprovalsComponent: React.FC = () => {
         });
         mutate('/api/orders/pending');
         mutate('/api/orders');
-        mutate('/api/finance');
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
       } else {
         const err = await res.json();
         throw new Error(err.error);
