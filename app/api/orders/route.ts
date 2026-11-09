@@ -2,9 +2,27 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../lib/prisma';
+import { normalizeSubteam } from '../../lib/budget-config';
 import { ItemStatus, OrderStatus, Prisma } from '@prisma/client';
 
 const PAGE_SIZE = 15;
+
+// An order belongs to the subteams it is charged to (its cost breakdown, keyed by
+// short code like AERO), not to the subteam of whoever placed it. Orders with no
+// breakdown fall back to the placer's subteam, stored as either the full name or the code.
+function subteamWhere(subteam: string): Prisma.OrderWhereInput {
+    const code = normalizeSubteam(subteam);
+    const names = Array.from(new Set([subteam, code]));
+    return {
+        OR: [
+            { costBreakdown: { path: [code], gt: 0 } },
+            {
+                costBreakdown: { equals: Prisma.AnyNull },
+                OR: names.map((name) => ({ subteam: { equals: name, mode: 'insensitive' as const } })),
+            },
+        ],
+    };
+}
 
 const orderSelect = {
     id: true,
@@ -103,7 +121,7 @@ export async function GET(request: NextRequest) {
 
         const baseWhere: Prisma.OrderWhereInput = {
             ...activeWhere,
-            ...(subteam ? { subteam: { equals: subteam, mode: 'insensitive' } } : {}),
+            ...(subteam ? subteamWhere(subteam) : {}),
             ...(statusFilter.length ? { status: { in: statusFilter } } : {}),
             ...(troubleOnly ? { trouble: true } : {}),
         };
