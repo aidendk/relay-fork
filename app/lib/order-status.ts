@@ -4,6 +4,20 @@ export function statusLabel(status: string) {
     return status.replace(/_/g, ' ');
 }
 
+// Statuses a person can assign. Retired enum values stay in the schema for old rows.
+export const SELECTABLE_ORDER_STATUSES: OrderStatus[] = [
+    OrderStatus.TO_ORDER,
+    OrderStatus.AWAITING_RAVI_APPROVAL,
+    OrderStatus.HOLD,
+    OrderStatus.MEEN_RECEIVED,
+    OrderStatus.MEEN_PLACED,
+    OrderStatus.SUPPLIER_SHIPPED,
+    OrderStatus.EV_AWAITING_PICKUP,
+    OrderStatus.PARTIAL_DELIVERY,
+    OrderStatus.MEEN_DELIVERED,
+    OrderStatus.ARCHIVED,
+];
+
 // One explanation per status. The About chart and the table pills both read this,
 // so the hover text and the click text cannot drift apart.
 export const STATUS_EXPLANATION: Record<OrderStatus, string> = {

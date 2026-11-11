@@ -16,7 +16,7 @@ import useSWR, { mutate } from 'swr';
 import { useSession } from 'next-auth/react';
 import { AlertTriangle, Check, ChevronDown, CircleHelp } from 'lucide-react';
 import { useToast } from '../toast/use-toast';
-import { STATUS_EXPLANATION, statusLabel } from '../../lib/order-status';
+import { SELECTABLE_ORDER_STATUSES, STATUS_EXPLANATION, statusLabel } from '../../lib/order-status';
 import StatusAbout from '../status-about/status-about';
 
 interface CostBreakdown {
@@ -92,12 +92,10 @@ const PAGE_SIZE = 15;
 const GROUPED_PAGE_SIZE = 500;
 
 // Statuses that show on the home screen, in the order an order moves through them.
-// Grouped views list groups in this order.
-const STATUS_ORDER: OrderStatus[] = [
-    'AWAITING_RAVI_APPROVAL', 'TO_ORDER', 'HOLD', 'MEEN_HOLD', 'PLACED', 'MEEN_PLACED',
-    'MEEN_RECEIVED', 'PROCESSED', 'SUPPLIER_SHIPPED', 'SHIPPED', 'PARTIAL', 'PARTIAL_DELIVERY',
-    'AWAITING_PICKUP', 'EV_AWAITING_PICKUP', 'DELIVERED', 'MEEN_DELIVERED',
-];
+// Archived orders live on their own page. Grouped views list groups in this order.
+const STATUS_ORDER: OrderStatus[] = SELECTABLE_ORDER_STATUSES.filter(
+    (status) => status !== OrderStatus.ARCHIVED,
+);
 const statusRank = (status: OrderStatus) => {
     const i = STATUS_ORDER.indexOf(status);
     return i === -1 ? STATUS_ORDER.length : i;

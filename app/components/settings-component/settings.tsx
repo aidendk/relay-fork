@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import { Download, FileText, Trash2, Upload, X } from 'lucide-react';
 import { checkAdmin, checkLead } from '../../lib/checkAdmin';
 import { CAR_YEARS } from '../../lib/car-year';
+import { SELECTABLE_ORDER_STATUSES } from '../../lib/order-status';
 
 interface SettingsMenuProps {
     order: SerializedOrderWithRelations | null;
@@ -494,11 +495,12 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ order, item, onClose, onUpd
                                         <div className={styles.field}>
                                             <label htmlFor="order-status">Status</label>
                                             <select id="order-status" value={orderStatus} onChange={handleOrderStatusChange}>
-                                                {Object.values(OrderStatus)
-                                                    .filter((s) => s !== OrderStatus.AWAITING_APPROVAL)
-                                                    .map((option) => (
-                                                        <option key={option} value={option}>{statusLabel(option)}</option>
-                                                    ))}
+                                                {(SELECTABLE_ORDER_STATUSES.includes(orderStatus)
+                                                    ? SELECTABLE_ORDER_STATUSES
+                                                    : [orderStatus, ...SELECTABLE_ORDER_STATUSES]
+                                                ).map((option) => (
+                                                    <option key={option} value={option}>{statusLabel(option)}</option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div className={styles.field}>
