@@ -27,6 +27,39 @@ h1.purchaseHeader{
     width: 95%;
 }
 
+.titleRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0.5rem 0;
+}
+
+.titleRow h1.purchaseHeader {
+    margin: 0;
+}
+
+.aboutButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    height: 32px;
+    padding: 0 0.8rem;
+    border-radius: 999px;
+    border: 1px solid #d8d9de;
+    background: #fff;
+    color: #545360;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.aboutButton:hover {
+    background: #f8f9fb;
+    border-color: #c8cad0;
+}
+
 
 .tableContainer {
     overflow-x: auto;
@@ -159,6 +192,31 @@ button.orderButton:hover{
     line-height: 1.25;
     white-space: normal;
     text-align: center;
+    cursor: help;
+}
+
+.statusTip {
+    position: fixed;
+    z-index: 40;
+    width: max-content;
+    max-width: 280px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #1f1f1f;
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+}
+
+.statusTipBelow {
+    transform: translate(-50%, 0);
 }
 
 .statusPill:has(.openURLIcon) {
@@ -449,10 +507,14 @@ button.orderButton:hover{
         width: 100%;
     }
 
+    .titleRow {
+        margin: 0 0 16px 0;
+    }
+
     h1.purchaseHeader {
         font-size: 1.4rem;
         font-weight: 600;
-        margin: 0 0 16px 0;
+        margin: 0;
         color: #111;
     }
 

@@ -14,8 +14,10 @@ import ShareIcon from "../../../assets/share.svg";
 import Image from 'next/image';
 import useSWR, { mutate } from 'swr';
 import { useSession } from 'next-auth/react';
-import { Check } from 'lucide-react';
+import { Check, CircleHelp } from 'lucide-react';
 import { useToast } from '../toast/use-toast';
+import { STATUS_EXPLANATION, statusLabel } from '../../lib/order-status';
+import StatusAbout from '../status-about/status-about';
 
 interface CostBreakdown {
     [key: string]: number;
@@ -106,7 +108,6 @@ const ITEM_STATUS_CLASS: Partial<Record<ItemStatus, string>> = {
 
 const statusClass = (status: OrderStatus) => STATUS_CLASS[status] ?? styles.orderStatusDefault;
 const itemStatusClass = (status: ItemStatus) => ITEM_STATUS_CLASS[status] ?? styles.orderStatusShipped;
-const statusLabel = (status: string) => status.replace(/_/g, ' ');
 
 const fetcher = async (url: string) => {
     const res = await fetch(url);
@@ -135,6 +136,8 @@ const OrderTable: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [showOrderForm, setShowOrderForm] = useState(false);
+    const [showAbout, setShowAbout] = useState(false);
+    const [statusTip, setStatusTip] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null);
     const [selectedOrder, setSelectedOrder] = useState<SerializedOrderWithRelations | null>(null);
     const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
     const [showSettingsMenu, setShowSettingsMenu] = useState<boolean>(false);
@@ -310,6 +313,25 @@ const OrderTable: React.FC = () => {
         </>
     );
 
+    const showStatusTip = (event: React.MouseEvent, status: OrderStatus) => {
+        const text = STATUS_EXPLANATION[status];
+        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+        const below = rect.top < 88;
+        const x = Math.min(window.innerWidth - 160, Math.max(160, rect.left + rect.width / 2));
+        setStatusTip({ text, x, y: below ? rect.bottom + 8 : rect.top - 8, below });
+    };
+
+    useEffect(() => {
+        if (!statusTip) return;
+        const hide = () => setStatusTip(null);
+        window.addEventListener('scroll', hide, true);
+        window.addEventListener('resize', hide);
+        return () => {
+            window.removeEventListener('scroll', hide, true);
+            window.removeEventListener('resize', hide);
+        };
+    }, [statusTip]);
+
     const handleStatusClick = (event: React.MouseEvent, order : SerializedOrderWithRelations) => {
         event.stopPropagation();
 
@@ -371,7 +393,17 @@ const OrderTable: React.FC = () => {
     return (
         <div className={styles.tableMainContainer}>
             <div className={styles.tableTop}>
-                <h1 className={styles.purchaseHeader}>Purchase Orders</h1>
+                <div className={styles.titleRow}>
+                    <h1 className={styles.purchaseHeader}>Purchase Orders</h1>
+                    <button
+                        type="button"
+                        className={styles.aboutButton}
+                        onClick={() => setShowAbout(true)}
+                    >
+                        <CircleHelp size={15} aria-hidden />
+                        What do these statuses mean?
+                    </button>
+                </div>
                 <div className={styles.tableSearch}>
                     <input
                         type="text"
@@ -401,6 +433,7 @@ const OrderTable: React.FC = () => {
                 </div>
             </div>
             {showOrderForm && <OrderForm onClose={() => { setShowOrderForm(false); refreshAllPages(); }} />}
+            {showAbout && <StatusAbout onClose={() => setShowAbout(false)} />}
             {showSettingsMenu && (
                 <SettingsMenu
                     order={selectedOrder}
@@ -501,6 +534,8 @@ const OrderTable: React.FC = () => {
                                     <td className={`${styles.tdText} ${styles.statusColumn}`}>
                                         <span
                                             className={`${styles.statusPill} ${statusClass(order.status)}`}
+                                            onMouseEnter={(event) => showStatusTip(event, order.status)}
+                                            onMouseLeave={() => setStatusTip(null)}
                                             onClick={(event) => handleStatusClick(event, order)}
                                         >
                                             {statusLabel(order.status)}
@@ -650,6 +685,7 @@ const OrderTable: React.FC = () => {
                         <div className={styles.mobileCardFooter}>
                             <span
                                 className={`${styles.mobileCardStatus} ${statusClass(order.status)}`}
+                                title={STATUS_EXPLANATION[order.status]}
                                 onClick={(event) => handleStatusClick(event, order)}
                             >
                                 {statusLabel(order.status)}
@@ -722,6 +758,15 @@ const OrderTable: React.FC = () => {
                 />
             </div>
         )}
+            {statusTip && (
+                <div
+                    className={`${styles.statusTip} ${statusTip.below ? styles.statusTipBelow : ''}`}
+                    style={{ left: statusTip.x, top: statusTip.y }}
+                    role="tooltip"
+                >
+                    {statusTip.text}
+                </div>
+            )}
         </div>
     );
 };
