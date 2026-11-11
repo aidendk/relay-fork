@@ -3,6 +3,7 @@ import prisma from '../../../lib/prisma';
 import { parse } from 'csv-parse/sync';
 import { ItemStatus, OrderStatus } from '@prisma/client';
 import { checkBudgetExceeded } from '../../../lib/budgets';
+import { CURRENT_CAR_YEAR, isCarYear } from '../../../lib/car-year';
 
 const REQUIRED_HEADERS = ['Item', 'Part Number', 'Notes', 'QTY to Buy', 'Cost', 'Vendor', 'Link'];
 
@@ -42,6 +43,11 @@ export async function POST(request: NextRequest) {
         const notes = formData.get('notes') as string;
         const estimatedCost = parseFloat(formData.get('estimatedCost') as string) || 0;
         const deliveryLocation = formData.get('deliveryLocation') as string;
+        const carYearInput = formData.get('carYear');
+        if (carYearInput !== null && !isCarYear(carYearInput)) {
+            return NextResponse.json({ error: `Invalid car year: ${carYearInput}` }, { status: 400 });
+        }
+        const carYear = carYearInput ?? CURRENT_CAR_YEAR;
 
         // Process cost breakdown
         const costBreakdownEntries: [string, number][] = [];
@@ -221,7 +227,7 @@ export async function POST(request: NextRequest) {
 
         // Check budget
         const budgetCheck = Object.keys(costBreakdown).length > 0
-            ? await checkBudgetExceeded(costBreakdown, estimatedCost)
+            ? await checkBudgetExceeded(costBreakdown, estimatedCost, carYear)
             : { exceeded: false, subteams: [] };
         const orderStatus = budgetCheck.exceeded
             ? OrderStatus.AWAITING_RAVI_APPROVAL
@@ -242,6 +248,7 @@ export async function POST(request: NextRequest) {
                     comments: notes || '',
                     costBreakdown,
                     deliveryLocation: deliveryLocation || '',
+                    carYear,
                 },
                 include: {
                     items: true

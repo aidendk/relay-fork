@@ -237,7 +237,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: 'seeded', historyId });
     }
 
-    const emails = await fetchNewMessages(auth, syncRecord.lastHistoryId);
+    let emails: EmailData[];
+    try {
+      emails = await fetchNewMessages(auth, syncRecord.lastHistoryId);
+    } catch (err: any) {
+      // Gmail returns 404 when startHistoryId is older than its history retention (~1 week).
+      // Re-seed the checkpoint so future syncs can resume instead of failing forever.
+      if (err?.code === 404 || err?.status === 404) {
+        const historyId = await getLatestHistoryId(auth);
+        console.warn(`History ${syncRecord.lastHistoryId} expired, re-seeding at ${historyId}`);
+        await prisma.gmailSync.update({
+          where: { id: 1 },
+          data: { lastHistoryId: historyId, lastSyncAt: new Date(), lastStatus: 'reseeded' },
+        });
+        return NextResponse.json({ status: 'reseeded', historyId });
+      }
+      throw err;
+    }
     const latestHistoryId = await getLatestHistoryId(auth);
 
     async function processEmail(email: EmailData): Promise<{ processed: number; skipped: number }> {

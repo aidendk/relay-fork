@@ -202,7 +202,7 @@ const BacklogComponent: React.FC = () => {
       
           if (response.ok) {
             mutate((key: string) => typeof key === 'string' && key.startsWith('/api/orders'));
-            mutate('/api/finance');
+            mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
             toast({
               title: markAsPickedUpTarget.type === 'order' ? "Order Picked Up" : "Item Picked Up",
               description: markAsPickedUpTarget.type === 'order' ? "Order has been picked up." : "Item has been picked up.",
@@ -745,7 +745,7 @@ const BacklogComponent: React.FC = () => {
                             if (response.ok) {
                                 // Update local state
                                 mutate((key: string) => typeof key === 'string' && key.startsWith('/api/orders'));
-            mutate('/api/finance');
+            mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
                                 setIsMeenOrderIdModalOpen(false);
                                 toast({
                                     title: "Order Updated",

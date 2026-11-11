@@ -48,3 +48,5 @@ policy.yaml
 .grok
 .taste-skill
 skills-lock.json
+# live database backups (contain production data)
+/db-backups/

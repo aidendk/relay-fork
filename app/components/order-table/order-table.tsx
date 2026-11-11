@@ -14,7 +14,7 @@ import ShareIcon from "../../../assets/share.svg";
 import Image from 'next/image';
 import useSWR, { mutate } from 'swr';
 import { useSession } from 'next-auth/react';
-import { Check, CircleHelp } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, CircleHelp } from 'lucide-react';
 import { useToast } from '../toast/use-toast';
 import { STATUS_EXPLANATION, statusLabel } from '../../lib/order-status';
 import StatusAbout from '../status-about/status-about';
@@ -61,6 +61,8 @@ export interface SerializedOrderWithRelations {
     items: SerializedItemsWithRelations[];
     deliveryLocation: string | null;
     deliveryPhotoUrl: string | null;
+    carYear: string;
+    trouble: boolean;
 }
 
 export interface SerializedItemsWithRelations {
@@ -86,6 +88,49 @@ export interface SerializedItemsWithRelations {
 };
 
 const PAGE_SIZE = 15;
+// The API's max page size; a status filter loads every match at once so groups are complete.
+const GROUPED_PAGE_SIZE = 500;
+
+// Statuses that show on the home screen, in the order an order moves through them.
+// Grouped views list groups in this order.
+const STATUS_ORDER: OrderStatus[] = [
+    'AWAITING_RAVI_APPROVAL', 'TO_ORDER', 'HOLD', 'MEEN_HOLD', 'PLACED', 'MEEN_PLACED',
+    'MEEN_RECEIVED', 'PROCESSED', 'SUPPLIER_SHIPPED', 'SHIPPED', 'PARTIAL', 'PARTIAL_DELIVERY',
+    'AWAITING_PICKUP', 'EV_AWAITING_PICKUP', 'DELIVERED', 'MEEN_DELIVERED',
+];
+const statusRank = (status: OrderStatus) => {
+    const i = STATUS_ORDER.indexOf(status);
+    return i === -1 ? STATUS_ORDER.length : i;
+};
+
+// Close a popover on a click outside its refs or on Escape.
+function useDismiss(open: boolean, close: () => void, refs: React.RefObject<HTMLElement>[]) {
+    useEffect(() => {
+        if (!open) return;
+        const handleClick = (e: MouseEvent) => {
+            if (!refs.some((ref) => ref.current?.contains(e.target as Node))) close();
+        };
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') close();
+        };
+        document.addEventListener('mousedown', handleClick);
+        document.addEventListener('keydown', handleKey);
+        return () => {
+            document.removeEventListener('mousedown', handleClick);
+            document.removeEventListener('keydown', handleKey);
+        };
+    // refs are stable useRef objects
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, close]);
+}
+
+const SUBTEAMS = [
+    "AERODYNAMICS", "BATTERY", "CHASSIS", "ELECTRONICS", "POWERTRAIN", "SUSPENSION",
+    "DISTRIBUTED BMS", "SOFTWARE", "VEHICLE DYNAMICS", "FINANCE", "OPERATIONS", "MARKETING",
+];
+
+const toTitleCase = (value: string) =>
+    value.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bBms\b/, 'BMS');
 
 const STATUS_CLASS: Partial<Record<OrderStatus, string>> = {
     TO_ORDER: styles.orderStatusToOrder,
@@ -116,25 +161,17 @@ const fetcher = async (url: string) => {
 
 const OrderTable: React.FC = () => {
 
-    useEffect(() => {
-        const eventSource = new EventSource('/api/notifications');
-        eventSource.onmessage = () => {
-            mutate((key: string) => typeof key === 'string' && key.startsWith('/api/orders'));
-            mutate('/api/finance');
-        };
-        eventSource.onerror = (error) => {
-            console.error('EventSource error:', error);
-            eventSource.close();
-        };
-
-        return () => {
-            eventSource.close();
-        };
-    }, [])
-
     const [expandedOrderIds, setExpandedOrderIds] = useState<number[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [subteamFilter, setSubteamFilter] = useState('');
+    const [showSubteamMenu, setShowSubteamMenu] = useState(false);
+    const subteamMenuRef = useRef<HTMLDivElement>(null);
+    const [statusFilter, setStatusFilter] = useState<OrderStatus[]>([]);
+    const [showStatusMenu, setShowStatusMenu] = useState(false);
+    const statusMenuRef = useRef<HTMLDivElement>(null);
+    const mobileStatusMenuRef = useRef<HTMLDivElement>(null);
+    const [troubleOnly, setTroubleOnly] = useState(false);
     const [showOrderForm, setShowOrderForm] = useState(false);
     const [showAbout, setShowAbout] = useState(false);
     const [statusTip, setStatusTip] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null);
@@ -153,6 +190,65 @@ const OrderTable: React.FC = () => {
     const { toast } = useToast();
     const currentUserSubteam = session?.user?.subteam ?? "";
 
+    const closeSubteamMenu = useCallback(() => setShowSubteamMenu(false), []);
+    const closeStatusMenu = useCallback(() => setShowStatusMenu(false), []);
+    useDismiss(showSubteamMenu, closeSubteamMenu, [subteamMenuRef]);
+    useDismiss(showStatusMenu, closeStatusMenu, [statusMenuRef, mobileStatusMenuRef]);
+
+    // The table scrolls sideways, which would clip a menu inside its header, so the
+    // header's status menu is fixed to the viewport under its button instead.
+    const [statusMenuPos, setStatusMenuPos] = useState<{ top: number; left: number } | null>(null);
+    const toggleStatusMenu = (e: React.MouseEvent<HTMLButtonElement>, fromHeader: boolean) => {
+        if (fromHeader) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setStatusMenuPos({ top: rect.bottom + 6, left: rect.left });
+        } else {
+            setStatusMenuPos(null);
+        }
+        setShowStatusMenu((open) => !open);
+    };
+
+    // A fixed menu would drift from its button on scroll, so close it instead.
+    useEffect(() => {
+        if (!showStatusMenu || !statusMenuPos) return;
+        const handleScroll = (e: Event) => {
+            if (!statusMenuRef.current?.contains(e.target as Node)) setShowStatusMenu(false);
+        };
+        const handleResize = () => setShowStatusMenu(false);
+        window.addEventListener('scroll', handleScroll, true);
+        window.addEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('scroll', handleScroll, true);
+            window.removeEventListener('resize', handleResize);
+        };
+    }, [showStatusMenu, statusMenuPos]);
+
+    const selectSubteam = (subteam: string) => {
+        setSubteamFilter(subteam);
+        setExtraPages([]);
+        setShowSubteamMenu(false);
+    };
+
+    const toggleStatus = (status: OrderStatus) => {
+        setStatusFilter((prev) =>
+            prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+        );
+        setExtraPages([]);
+    };
+
+    const clearStatusFilter = () => {
+        setStatusFilter([]);
+        setExtraPages([]);
+        setShowStatusMenu(false);
+    };
+
+    const toggleTroubleOnly = () => {
+        setTroubleOnly((on) => !on);
+        setExtraPages([]);
+    };
+
+    const isGrouped = statusFilter.length > 0;
+
     // Debounce search input
     useEffect(() => {
         debounceRef.current = setTimeout(() => {
@@ -162,9 +258,17 @@ const OrderTable: React.FC = () => {
         return () => clearTimeout(debounceRef.current);
     }, [searchQuery]);
 
-    const apiUrl = debouncedSearch
-        ? `/api/orders?limit=${PAGE_SIZE}&offset=0&search=${encodeURIComponent(debouncedSearch)}`
-        : `/api/orders?limit=${PAGE_SIZE}&offset=0`;
+    const buildOrdersUrl = useCallback((offset: number) => {
+        const limit = statusFilter.length ? GROUPED_PAGE_SIZE : PAGE_SIZE;
+        const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+        if (debouncedSearch) params.set('search', debouncedSearch);
+        if (subteamFilter) params.set('subteam', subteamFilter);
+        if (statusFilter.length) params.set('status', [...statusFilter].sort().join(','));
+        if (troubleOnly) params.set('trouble', '1');
+        return `/api/orders?${params}`;
+    }, [debouncedSearch, subteamFilter, statusFilter, troubleOnly]);
+
+    const apiUrl = buildOrdersUrl(0);
 
     const { data, error } = useSWR(apiUrl, fetcher, { refreshInterval: 60000 });
 
@@ -189,10 +293,7 @@ const OrderTable: React.FC = () => {
         const nextOffset = firstPageOrders.length + extraPages.flat().length;
         setLoadingMore(true);
         try {
-            const url = debouncedSearch
-                ? `/api/orders?limit=${PAGE_SIZE}&offset=${nextOffset}&search=${encodeURIComponent(debouncedSearch)}`
-                : `/api/orders?limit=${PAGE_SIZE}&offset=${nextOffset}`;
-            const res = await fetch(url);
+            const res = await fetch(buildOrdersUrl(nextOffset));
             const json = await res.json();
             setExtraPages(prev => [...prev, json.orders]);
             setHasMore(json.hasMore ?? false);
@@ -201,12 +302,12 @@ const OrderTable: React.FC = () => {
         } finally {
             setLoadingMore(false);
         }
-    }, [firstPageOrders.length, extraPages, debouncedSearch]);
+    }, [firstPageOrders.length, extraPages, buildOrdersUrl]);
 
     const refreshAllPages = useCallback(() => {
         // Re-fetch the first page via SWR
         mutate(apiUrl);
-        mutate('/api/finance');
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
         // Clear extra pages so they get re-fetched fresh if user scrolls
         setExtraPages([]);
     }, [apiUrl]);
@@ -238,8 +339,26 @@ const OrderTable: React.FC = () => {
             });
         }
 
+        // Grouped view: stable sort keeps the column sort inside each status group
+        if (isGrouped) {
+            result = result.slice().sort((a, b) => statusRank(a.status) - statusRank(b.status));
+        }
+
         return result;
-    }, [orders, sortedColumn, sortOrder]);
+    }, [orders, sortedColumn, sortOrder, isGrouped]);
+
+    const statusCounts: Partial<Record<OrderStatus, number>> = data?.statusCounts ?? {};
+    const troubleCount: number = data?.troubleCount ?? 0;
+
+    // In a grouped view, the number of displayed orders in each status, for the group headings.
+    const groupSizes = useMemo(() => {
+        const sizes: Partial<Record<OrderStatus, number>> = {};
+        for (const order of displayOrders) sizes[order.status] = (sizes[order.status] ?? 0) + 1;
+        return sizes;
+    }, [displayOrders]);
+
+    const startsGroup = (index: number) =>
+        isGrouped && (index === 0 || displayOrders[index - 1].status !== displayOrders[index].status);
 
     const handleSettingsClick = (order: SerializedOrderWithRelations, item?: Item) => {
         if (item) {
@@ -377,6 +496,56 @@ const OrderTable: React.FC = () => {
         setSearchQuery(currentUserSubteam.toLowerCase());
     };
 
+    const statusFilterLabel =
+        statusFilter.length === 0 ? 'All Statuses'
+        : statusFilter.length === 1 ? toTitleCase(statusLabel(statusFilter[0]))
+        : `${statusFilter.length} Statuses`;
+
+    // One menu, rendered in the Status column header on desktop and in the toolbar on mobile.
+    const renderStatusMenu = (inHeader: boolean) => showStatusMenu && (inHeader === !!statusMenuPos) && (
+        <ul
+            className={`${styles.subteamMenu} ${styles.statusMenu}`}
+            style={inHeader && statusMenuPos ? {
+                position: 'fixed',
+                top: statusMenuPos.top,
+                left: statusMenuPos.left,
+                maxHeight: `calc(100vh - ${statusMenuPos.top + 16}px)`,
+            } : undefined}
+            role="listbox"
+            aria-multiselectable="true"
+            aria-label="Order statuses"
+        >
+            <li role="option" aria-selected={statusFilter.length === 0}>
+                <button
+                    type="button"
+                    className={`${styles.subteamOption} ${statusFilter.length === 0 ? styles.subteamOptionSelected : ''}`}
+                    onClick={clearStatusFilter}
+                >
+                    All Statuses
+                    {statusFilter.length === 0 && <Check size={14} />}
+                </button>
+            </li>
+            {STATUS_ORDER.map((status) => {
+                const selected = statusFilter.includes(status);
+                const count = statusCounts[status] ?? 0;
+                return (
+                    <li key={status} role="option" aria-selected={selected}>
+                        <button
+                            type="button"
+                            className={`${styles.subteamOption} ${selected ? styles.subteamOptionSelected : ''} ${count === 0 && !selected ? styles.statusOptionEmpty : ''}`}
+                            onClick={() => toggleStatus(status)}
+                        >
+                            <span className={`${styles.statusDot} ${statusClass(status)}`} aria-hidden />
+                            <span className={styles.statusOptionLabel}>{toTitleCase(statusLabel(status))}</span>
+                            <span className={styles.statusOptionCount}>{count}</span>
+                            <span className={styles.statusOptionCheck}>{selected && <Check size={14} />}</span>
+                        </button>
+                    </li>
+                );
+            })}
+        </ul>
+    );
+
     const loadMoreButton = hasMore && !isLoading && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem' }}>
             <button
@@ -412,6 +581,60 @@ const OrderTable: React.FC = () => {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={styles.searchBar}
                     />
+                    <div className={styles.subteamDropdown} ref={subteamMenuRef}>
+                        <button
+                            type="button"
+                            className={`${styles.subteamFilter} ${showSubteamMenu ? styles.subteamFilterOpen : ''}`}
+                            onClick={() => setShowSubteamMenu((open) => !open)}
+                            aria-haspopup="listbox"
+                            aria-expanded={showSubteamMenu}
+                            aria-label="Filter by subteam"
+                        >
+                            {subteamFilter ? toTitleCase(subteamFilter) : 'All Subteams'}
+                        </button>
+                        {showSubteamMenu && (
+                            <ul className={styles.subteamMenu} role="listbox" aria-label="Subteams">
+                                {['', ...SUBTEAMS].map((subteam) => {
+                                    const selected = subteam === subteamFilter;
+                                    return (
+                                        <li key={subteam || 'all'} role="option" aria-selected={selected}>
+                                            <button
+                                                type="button"
+                                                className={`${styles.subteamOption} ${selected ? styles.subteamOptionSelected : ''}`}
+                                                onClick={() => selectSubteam(subteam)}
+                                            >
+                                                {subteam ? toTitleCase(subteam) : 'All Subteams'}
+                                                {selected && <Check size={14} />}
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+                    </div>
+                    <div className={`${styles.subteamDropdown} ${styles.mobileStatusDropdown}`} ref={mobileStatusMenuRef}>
+                        <button
+                            type="button"
+                            className={`${styles.subteamFilter} ${showStatusMenu ? styles.subteamFilterOpen : ''}`}
+                            onClick={(e) => toggleStatusMenu(e, false)}
+                            aria-haspopup="listbox"
+                            aria-expanded={showStatusMenu}
+                            aria-label="Filter by status"
+                        >
+                            {statusFilterLabel}
+                        </button>
+                        {renderStatusMenu(false)}
+                    </div>
+                    <button
+                        className={`${styles.myOrdersButton} ${styles.troubleFilter} ${troubleOnly ? styles.troubleFilterOn : ''}`}
+                        onClick={toggleTroubleOnly}
+                        aria-pressed={troubleOnly}
+                        title="Show only orders flagged as trouble"
+                    >
+                        <AlertTriangle size={14} aria-hidden />
+                        Trouble
+                        <span className={styles.troubleCount}>{troubleCount}</span>
+                    </button>
                     <button
                         className={styles.myOrdersButton}
                         onClick={handleMyOrders}
@@ -477,7 +700,22 @@ const OrderTable: React.FC = () => {
                                     className={`${styles.sortIcon} ${sortedColumn === 'price' && sortOrder === 'desc' ? styles.desc : styles.asc}`}
                                 />
                             </th>
-                            <th className={`${styles.thText} ${styles.statusColumn}`}>Status</th>
+                            <th className={`${styles.thText} ${styles.statusColumn} ${styles.statusHeader}`}>
+                                <div className={styles.statusHeaderDropdown} ref={statusMenuRef}>
+                                    <button
+                                        type="button"
+                                        className={`${styles.statusHeaderButton} ${statusFilter.length ? styles.statusHeaderButtonActive : ''}`}
+                                        onClick={(e) => toggleStatusMenu(e, true)}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={showStatusMenu}
+                                        title="Filter and group by status"
+                                    >
+                                        {statusFilter.length ? statusFilterLabel : 'Status'}
+                                        <ChevronDown size={12} aria-hidden />
+                                    </button>
+                                    {renderStatusMenu(true)}
+                                </div>
+                            </th>
                             <th className={`${styles.thText} ${styles.subteamColumn}`}>Subteam</th>
                             <th className={`${styles.commentsColumnHeader} ${styles.commentsColumn}`}>Comments</th>
                             <th className={`${styles.settingsCellHeader} ${styles.settingsColumn}`}></th>
@@ -485,13 +723,23 @@ const OrderTable: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {isLoading ? skeletonRows : displayOrders.map((order) => (
+                        {isLoading ? skeletonRows : displayOrders.map((order, index) => (
                             <React.Fragment key={order.id}>
+                                {startsGroup(index) && (
+                                    <tr className={styles.groupRow}>
+                                        <td colSpan={11}>
+                                            <span className={`${styles.statusPill} ${statusClass(order.status)}`}>{statusLabel(order.status)}</span>
+                                            <span className={styles.groupCount}>{groupSizes[order.status]} {groupSizes[order.status] === 1 ? 'order' : 'orders'}</span>
+                                        </td>
+                                    </tr>
+                                )}
                                 <tr
                                     onClick={() => toggleExpand(order.id, order.items, order.url)}
-                                    className={styles.order}
+                                    className={`${styles.order} ${order.trouble ? styles.troubleRow : ''}`}
+                                    title={order.trouble ? 'Flagged as trouble: no update in a long time' : undefined}
                                 >
                                     <td className={`${styles.tdText} ${styles.idColumn}`}>
+                                        {order.trouble && <AlertTriangle className={styles.troubleIcon} size={14} aria-label="Trouble" />}
                                         {order.meenOrderId ? "#" + order.meenOrderId : "N/A"}
                                     </td>
                                     <td className={`${styles.tdText} ${styles.textColumn}`}>
@@ -645,14 +893,25 @@ const OrderTable: React.FC = () => {
 
             {/* Mobile Card View */}
             <div className={styles.mobileCardList}>
-                {isLoading ? skeletonCards : displayOrders.map((order) => (
+                {isLoading ? skeletonCards : displayOrders.map((order, index) => (
+                    <React.Fragment key={order.id}>
+                    {startsGroup(index) && (
+                        <div className={styles.mobileGroupHeader}>
+                            <span className={`${styles.mobileCardStatus} ${statusClass(order.status)}`}>{statusLabel(order.status)}</span>
+                            <span className={styles.groupCount}>{groupSizes[order.status]}</span>
+                        </div>
+                    )}
                     <div
-                        key={order.id}
-                        className={styles.mobileCard}
+                        className={`${styles.mobileCard} ${order.trouble ? styles.mobileCardTrouble : ''}`}
                         onClick={() => toggleExpand(order.id, order.items, order.url)}
                     >
                         <div className={styles.mobileCardHeader}>
                             <div className={styles.mobileCardTitle}>
+                                {order.trouble && (
+                                    <span className={styles.mobileTroubleTag}>
+                                        <AlertTriangle size={12} aria-hidden /> Trouble
+                                    </span>
+                                )}
                                 <span className={styles.mobileCardName}>{order.name}</span>
                                 <span className={styles.mobileCardId}>
                                     {order.meenOrderId ? `#${order.meenOrderId}` : ''}
@@ -743,13 +1002,20 @@ const OrderTable: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    </React.Fragment>
                 ))}
             </div>
             {loadMoreButton}
             {!isLoading && displayOrders.length === 0 && (
             <div className={styles.emptyState}>
-                <p>No active orders at the moment.</p>
-                <p>Looks like everything is all set!</p>
+                {statusFilter.length || troubleOnly || subteamFilter || debouncedSearch ? (
+                    <p>No orders match these filters.</p>
+                ) : (
+                    <>
+                        <p>No active orders at the moment.</p>
+                        <p>Looks like everything is all set!</p>
+                    </>
+                )}
                 <Image
                     src={EmptyIcon.src}
                     height={100}

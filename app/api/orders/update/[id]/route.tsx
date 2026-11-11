@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { ItemStatus, OrderStatus, Prisma } from '@prisma/client';
+import { isCarYear } from '../../../../lib/car-year';
 
 // Define the progression of statuses with corresponding indices
 const orderStatusIndices: { [key in OrderStatus]: number } = {
@@ -67,12 +68,19 @@ export async function PUT(
   const { id } = await params;
   const orderId = Number(id);
   const body = await request.json();
-  const { status: statusString, totalCost, costVerified, carrier, trackingId, meenOrderId, comments, costBreakdown, } = body;
+  const { status: statusString, totalCost, costVerified, carrier, trackingId, meenOrderId, comments, costBreakdown, carYear, trouble } = body;
   
   console.log('Update request received:', { orderId, statusString, totalCost, costVerified, carrier, trackingId, meenOrderId, comments });
 
   if (!statusString || !orderStatusIndices.hasOwnProperty(statusString)) {
     return NextResponse.json({ error: `Invalid status: ${statusString}` }, { status: 400 });
+  }
+
+  if (carYear !== undefined && !isCarYear(carYear)) {
+    return NextResponse.json({ error: `Invalid car year: ${carYear}` }, { status: 400 });
+  }
+  if (trouble !== undefined && typeof trouble !== 'boolean') {
+    return NextResponse.json({ error: 'trouble must be a boolean' }, { status: 400 });
   }
 
   const newOrderStatus = statusString as OrderStatus;
@@ -103,6 +111,8 @@ export async function PUT(
       meenOrderId?: string;
       comments?: string;
       costBreakdown?: Prisma.InputJsonValue;
+      carYear?: string;
+      trouble?: boolean;
     } = {
       status: newOrderStatus,
     };
@@ -114,6 +124,8 @@ export async function PUT(
     if (meenOrderId !== undefined) updateData.meenOrderId = meenOrderId;
     if (comments !== undefined) updateData.comments = comments;
     if (costBreakdown !== undefined) updateData.costBreakdown = costBreakdown;
+    if (carYear !== undefined) updateData.carYear = carYear;
+    if (trouble !== undefined) updateData.trouble = trouble;
 
     console.log('Update data:', updateData);
 

@@ -2,9 +2,27 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../lib/prisma';
+import { normalizeSubteam } from '../../lib/budget-config';
 import { ItemStatus, OrderStatus, Prisma } from '@prisma/client';
 
 const PAGE_SIZE = 15;
+
+// An order belongs to the subteams it is charged to (its cost breakdown, keyed by
+// short code like AERO), not to the subteam of whoever placed it. Orders with no
+// breakdown fall back to the placer's subteam, stored as either the full name or the code.
+function subteamWhere(subteam: string): Prisma.OrderWhereInput {
+    const code = normalizeSubteam(subteam);
+    const names = Array.from(new Set([subteam, code]));
+    return {
+        OR: [
+            { costBreakdown: { path: [code], gt: 0 } },
+            {
+                costBreakdown: { equals: Prisma.AnyNull },
+                OR: names.map((name) => ({ subteam: { equals: name, mode: 'insensitive' as const } })),
+            },
+        ],
+    };
+}
 
 const orderSelect = {
     id: true,
@@ -26,6 +44,8 @@ const orderSelect = {
     updatedAt: true,
     deliveryLocation: true,
     deliveryPhotoUrl: true,
+    carYear: true,
+    trouble: true,
     user: {
         select: {
             id: true,
@@ -82,6 +102,11 @@ export async function GET(request: NextRequest) {
         const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
         const limit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') || String(PAGE_SIZE), 10) || PAGE_SIZE));
         const search = (searchParams.get('search') || '').trim();
+        const subteam = (searchParams.get('subteam') || '').trim();
+        const statusFilter = (searchParams.get('status') || '')
+            .split(',')
+            .filter((s): s is OrderStatus => (Object.values(OrderStatus) as string[]).includes(s));
+        const troubleOnly = searchParams.get('trouble') === '1';
         const query = search.toLowerCase();
         const orderStatuses = (Object.values(OrderStatus) as OrderStatus[]).filter((status) =>
             status.toLowerCase().includes(query)
@@ -90,8 +115,15 @@ export async function GET(request: NextRequest) {
             status.toLowerCase().includes(query)
         );
 
-        const baseWhere: Prisma.OrderWhereInput = {
+        const activeWhere: Prisma.OrderWhereInput = {
             NOT: { status: { in: ['ARCHIVED', 'EV_ARCHIVED', 'AWAITING_APPROVAL'] } },
+        };
+
+        const baseWhere: Prisma.OrderWhereInput = {
+            ...activeWhere,
+            ...(subteam ? subteamWhere(subteam) : {}),
+            ...(statusFilter.length ? { status: { in: statusFilter } } : {}),
+            ...(troubleOnly ? { trouble: true } : {}),
         };
 
         const where: Prisma.OrderWhereInput = search
@@ -115,7 +147,7 @@ export async function GET(request: NextRequest) {
             }
             : baseWhere;
 
-        const [orders, total] = await Promise.all([
+        const [orders, total, troubleCount, statusGroups] = await Promise.all([
             prisma.order.findMany({
                 where,
                 select: orderSelect,
@@ -124,11 +156,16 @@ export async function GET(request: NextRequest) {
                 take: limit,
             }),
             prisma.order.count({ where }),
+            prisma.order.count({ where: { ...activeWhere, trouble: true } }),
+            prisma.order.groupBy({ by: ['status'], where: activeWhere, _count: { _all: true } }),
         ]);
+        const statusCounts = Object.fromEntries(statusGroups.map((g) => [g.status, g._count._all]));
 
         const response = NextResponse.json({
             orders: serialize(orders),
             total,
+            troubleCount,
+            statusCounts,
             hasMore: offset + orders.length < total,
         });
         response.headers.set('Cache-Control', 'no-store');

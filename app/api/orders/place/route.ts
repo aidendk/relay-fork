@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../lib/prisma';
 import { ItemStatus, OrderStatus } from '@prisma/client';
 import { checkBudgetExceeded } from '../../../lib/budgets';
+import { CURRENT_CAR_YEAR, isCarYear } from '../../../lib/car-year';
 
 export async function POST(request: NextRequest) {
 
@@ -10,6 +11,10 @@ export async function POST(request: NextRequest) {
     const { orderName, cartUrl, items, vendor, totalCost, comments, costBreakdown, supportingDocs, deliveryLocation } = body;
 
     const userEmail = body.userEmail;
+    if (body.carYear !== undefined && !isCarYear(body.carYear)) {
+        return NextResponse.json({ error: `Invalid car year: ${body.carYear}` }, { status: 400 });
+    }
+    const carYear: string = body.carYear ?? CURRENT_CAR_YEAR;
 
     // Get the user from the database
     const user = await prisma.user.findUnique({
@@ -34,7 +39,7 @@ export async function POST(request: NextRequest) {
 
         // Check budget
         const budgetCheck = costBreakdown
-            ? await checkBudgetExceeded(costBreakdown, parsedCost)
+            ? await checkBudgetExceeded(costBreakdown, parsedCost, carYear)
             : { exceeded: false, subteams: [] };
         const orderStatus = budgetCheck.exceeded
             ? OrderStatus.AWAITING_RAVI_APPROVAL
@@ -54,6 +59,7 @@ export async function POST(request: NextRequest) {
                     url: cartUrl || null,
                     costBreakdown,
                     deliveryLocation,
+                    carYear,
                 },
             });
 
@@ -91,7 +97,7 @@ export async function POST(request: NextRequest) {
 
         // Check budget
         const budgetCheck = costBreakdown
-            ? await checkBudgetExceeded(costBreakdown, orderCost)
+            ? await checkBudgetExceeded(costBreakdown, orderCost, carYear)
             : { exceeded: false, subteams: [] };
         const orderStatus = budgetCheck.exceeded
             ? OrderStatus.AWAITING_RAVI_APPROVAL
@@ -124,6 +130,7 @@ export async function POST(request: NextRequest) {
                         },
                     },
                     deliveryLocation: deliveryLocation,
+                    carYear,
                 },
             });
 

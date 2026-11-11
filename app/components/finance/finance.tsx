@@ -1,13 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import styles from './finance.module.css';
 import useSWR from 'swr';
 import { Bar, Pie } from 'react-chartjs-2';
 import 'chart.js/auto';
 import { Item } from '@prisma/client';
 import * as XLSX from 'xlsx';
-import { BUDGET_START_DATE, SUBTEAM_BUDGETS } from '../../lib/budget-config';
+import { CAR_YEAR_BUDGETS, SUBTEAM_CODES } from '../../lib/budget-config';
+import { CAR_YEARS, CURRENT_CAR_YEAR, seasonRange } from '../../lib/car-year';
 
 // Enums based on your schema
 enum Role {
@@ -83,9 +84,11 @@ interface Order {
   updatedAt: string;
   items: Item[];
   supportingDocs: Document[];
+  carYear: string;
 }
 
 interface FinanceData {
+  carYear: string;
   orders: Order[];
 }
 
@@ -100,7 +103,9 @@ const fetcher = async (url: string): Promise<FinanceData> => {
 
 
 const FinanceDashboard: React.FC = () => {
-  const { data, error, mutate } = useSWR<FinanceData>('/api/finance', fetcher, {
+  const [carYear, setCarYear] = useState(CURRENT_CAR_YEAR);
+  const { data, error, mutate } = useSWR<FinanceData>(`/api/finance?carYear=${carYear}`, fetcher, {
+    keepPreviousData: true,
     refreshInterval: 30000,
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
@@ -132,18 +137,35 @@ const FinanceDashboard: React.FC = () => {
     return mapping[normalized] || normalized;
   };
 
-  const subteamBudgets = SUBTEAM_BUDGETS;
+  // Budgets are set per car year; a season without budgets shows spending only.
+  const subteamBudgets: Record<string, number> | undefined = CAR_YEAR_BUDGETS[carYear];
+  const hasBudget = !!subteamBudgets;
+  const isCurrentSeason = carYear === CURRENT_CAR_YEAR;
 
-  const overallBudget = 136480.99;
+  const overallBudget = subteamBudgets
+    ? Object.values(subteamBudgets).reduce((sum, b) => sum + b, 0)
+    : 0;
 
-  const startDate = new Date(BUDGET_START_DATE);
-  const endDate = new Date('2027-05-31');
+  const { start: startDate, end: endDate } = seasonRange(carYear);
   const currentDate = new Date();
   const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  const daysPassed = Math.ceil((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  const daysPassed = Math.min(totalDays, Math.ceil((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+  const carYearSelect = (
+    <select
+      className={styles.carYearSelect}
+      value={carYear}
+      onChange={(e) => setCarYear(e.target.value)}
+      aria-label="Car year"
+    >
+      {CAR_YEARS.map((year) => (
+        <option key={year} value={year}>{year}</option>
+      ))}
+    </select>
+  );
 
   if (error) {
-    return <div>Error loading finance data.</div>;
+    return <div>Error loading finance data. {carYearSelect}</div>;
   }
 
   if (!data) {
@@ -174,9 +196,9 @@ const FinanceDashboard: React.FC = () => {
   {} as Record<string, number>
 );
 
-  const subteamLabels = Object.keys(subteamBudgets);
+  const subteamLabels = SUBTEAM_CODES;
   const subteamBudgetData = subteamLabels.map(
-    (subteam) => subteamBudgets[subteam]
+    (subteam) => subteamBudgets?.[subteam] ?? 0
   );
 
   const subteamSpentData = subteamLabels.map((subteam) => {
@@ -196,7 +218,7 @@ const FinanceDashboard: React.FC = () => {
 
   // Determine over-budget subteams
   const subteamOverBudget = subteamLabels.map((subteam, index) => {
-    return subteamSpentData[index] > subteamBudgetData[index];
+    return hasBudget && subteamSpentData[index] > subteamBudgetData[index];
   });
 
   // Calculate monthly spending
@@ -210,7 +232,7 @@ const FinanceDashboard: React.FC = () => {
     {} as Record<string, number>
   );
 
-  // Months in the AME27 budget period, from June to May
+  // Months in the season, from June to May
   const months = [
     'Jun',
     'Jul',
@@ -298,7 +320,7 @@ const FinanceDashboard: React.FC = () => {
   // 4. Budget Utilization
   const totalSpent = orders
     .reduce((acc: number, order: Order) => acc + order.totalCost, 0);
-  const budgetUtilization = (totalSpent / overallBudget) * 100;
+  const budgetUtilization = overallBudget > 0 ? (totalSpent / overallBudget) * 100 : 0;
 
   // Additional Metrics for Number Widgets
   // 5. Average Order Value
@@ -359,6 +381,8 @@ const FinanceDashboard: React.FC = () => {
 
     // Sheet 4: Key Metrics
     const metricsData = [
+      { Metric: 'Car Year', Value: carYear },
+      { Metric: 'Total Spent', Value: `$${totalSpent.toFixed(2)}` },
       { Metric: 'Spending This Month', Value: `$${spentThisMonth.toFixed(2)}` },
       { Metric: 'Budget Utilization', Value: `${budgetUtilization.toFixed(2)}%` },
       { Metric: 'Budget Remaining', Value: `$${budgetRemainingAmount.toFixed(2)}` },
@@ -373,7 +397,7 @@ const FinanceDashboard: React.FC = () => {
     XLSX.utils.book_append_sheet(wb, ws4, 'Key Metrics');
 
     // Download
-    XLSX.writeFile(wb, 'finance_dashboard.xlsx');
+    XLSX.writeFile(wb, `finance_dashboard_${carYear}.xlsx`);
   };
 
   return (
@@ -381,6 +405,7 @@ const FinanceDashboard: React.FC = () => {
       <div className={styles.dashboardHeader}>
         <h1>Finance Dashboard</h1>
         <div className={styles.headerButtons}>
+          {carYearSelect}
           <button onClick={handleRefresh} className={styles.refreshButton}>
             Refresh Data
           </button>
@@ -395,13 +420,16 @@ const FinanceDashboard: React.FC = () => {
         <div className={styles.chartsContainer}>
           {/* Total Spending by Subteam */}
           <div className={styles.chartTile}>
-            <h2 className={styles.tileTitle}>Total Spending by Subteam</h2>
+            <h2 className={styles.tileTitle}>
+              Total Spending by Subteam · {carYear}
+              {!hasBudget && <span className={styles.tileNote}> (no budgets set)</span>}
+            </h2>
             <div className={styles.chartWrapper}>
               <Bar
                 data={{
                   labels: subteamLabels,
                   datasets: [
-                    {
+                    ...(hasBudget ? [{
                       label: 'Budget',
                       data: subteamBudgetData,
                       backgroundColor: 'rgba(112, 68, 242, 0.2)',
@@ -409,7 +437,7 @@ const FinanceDashboard: React.FC = () => {
                       borderWidth: 1,
                       borderRadius: 10,
                       barPercentage: 0.4,
-                    },
+                    }] : []),
                     {
                       label: 'Spent',
                       data: subteamSpentData,
@@ -547,37 +575,55 @@ const FinanceDashboard: React.FC = () => {
         {/* Right Side - Tiles */}
         <div className={styles.tilesContainer}>
           <div className={styles.numberTiles}>
-            {/* Spending This Month */}
-            <div className={styles.tile}>
-              <h2 className={styles.tileTitle}>Spending This Month</h2>
-              <p className={styles.amount}>${spentThisMonth.toFixed(2)}</p>
-              <p
-                className={`${percentageChange >= 0
-                  ? styles.percentagePositive
-                  : styles.percentageNegative} ${styles.tileSub}`}
-              >
-                {percentageChange >= 0 ? '+' : ''}
-                {percentageChange.toFixed(2)}% versus last month
-              </p>
-            </div>
+            {/* Spending This Month (current season only; a past season shows its total) */}
+            {isCurrentSeason ? (
+              <div className={styles.tile}>
+                <h2 className={styles.tileTitle}>Spending This Month</h2>
+                <p className={styles.amount}>${spentThisMonth.toFixed(2)}</p>
+                <p
+                  className={`${percentageChange >= 0
+                    ? styles.percentagePositive
+                    : styles.percentageNegative} ${styles.tileSub}`}
+                >
+                  {percentageChange >= 0 ? '+' : ''}
+                  {percentageChange.toFixed(2)}% versus last month
+                </p>
+              </div>
+            ) : (
+              <div className={styles.tile}>
+                <h2 className={styles.tileTitle}>Total Spent</h2>
+                <p className={styles.amount}>${totalSpent.toFixed(2)}</p>
+                <p className={styles.tileSub}>{orders.length} orders for {carYear}</p>
+              </div>
+            )}
 
-            {/* Budget Utilization */}
-            <div className={styles.tile}>
-              <h2 className={styles.tileTitle}>Budget Utilization</h2>
-              <p className={styles.amount}>
-                {budgetUtilization.toFixed(2)}%
-              </p>
-              <p className={styles.tileSub}>of Overall Budget</p>
-            </div>
+            {hasBudget ? (
+              <>
+                {/* Budget Utilization */}
+                <div className={styles.tile}>
+                  <h2 className={styles.tileTitle}>Budget Utilization</h2>
+                  <p className={styles.amount}>
+                    {budgetUtilization.toFixed(2)}%
+                  </p>
+                  <p className={styles.tileSub}>of Overall Budget</p>
+                </div>
 
-            {/* Budget Remaining */}
-            <div className={styles.tile}>
-              <h2 className={styles.tileTitle}>Budget Remaining</h2>
-              <p className={styles.amount}>
-                ${budgetRemainingAmount.toFixed(2)}
-              </p>
-              <p className={styles.tileSub}>Budget (${overallBudget})</p>
-            </div>
+                {/* Budget Remaining */}
+                <div className={styles.tile}>
+                  <h2 className={styles.tileTitle}>Budget Remaining</h2>
+                  <p className={styles.amount}>
+                    ${budgetRemainingAmount.toFixed(2)}
+                  </p>
+                  <p className={styles.tileSub}>Budget (${overallBudget.toFixed(2)})</p>
+                </div>
+              </>
+            ) : (
+              <div className={styles.tile}>
+                <h2 className={styles.tileTitle}>Budget</h2>
+                <p className={styles.amount}>—</p>
+                <p className={styles.tileSub}>No budgets set for {carYear}</p>
+              </div>
+            )}
 
             {/* Number of Vendors */}
             <div className={styles.tile}>

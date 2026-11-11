@@ -92,6 +92,7 @@ function main() {
                                     _a[user.subteam] = 100,
                                     _a),
                                 createdAt: createdAt,
+                                carYear: 'AME' + ((createdAt.getUTCFullYear() % 100) + (createdAt.getUTCMonth() >= 5 ? 1 : 0)),
                                 items: {
                                     create: [
                                         {

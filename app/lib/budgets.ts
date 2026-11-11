@@ -1,20 +1,23 @@
 // Server-only budget utilities — imports Prisma, do NOT use from client components.
 
 import prisma from './prisma';
-import { BUDGET_START_DATE, SUBTEAM_BUDGETS, normalizeSubteam } from './budget-config';
+import { CAR_YEAR_BUDGETS, normalizeSubteam } from './budget-config';
 
 // Re-export client-safe symbols for convenience in server code.
 export { SUBTEAM_BUDGETS, normalizeSubteam, isPM, PM_EMAILS } from './budget-config';
 
 export async function checkBudgetExceeded(
   costBreakdown: Record<string, number>,
-  totalCost: number
+  totalCost: number,
+  carYear: string
 ): Promise<{ exceeded: boolean; subteams: string[] }> {
+  // Budgets are set per car year; a car year without budgets has nothing to exceed.
+  const budgets = CAR_YEAR_BUDGETS[carYear];
+  if (!budgets) return { exceeded: false, subteams: [] };
+
   const orders = await prisma.order.findMany({
     where: {
-      createdAt: {
-        gte: new Date(BUDGET_START_DATE),
-      },
+      carYear,
       status: {
         notIn: ['AWAITING_APPROVAL', 'AWAITING_RAVI_APPROVAL'],
       },
@@ -48,7 +51,7 @@ export async function checkBudgetExceeded(
   for (const [subteam, percentage] of Object.entries(costBreakdown)) {
     if (typeof percentage === 'number' && percentage > 0) {
       const normalized = normalizeSubteam(subteam);
-      const budget = SUBTEAM_BUDGETS[normalized];
+      const budget = budgets[normalized];
       if (budget !== undefined) {
         const current = currentSpending[normalized] || 0;
         const newAmount = (percentage / 100) * totalCost;

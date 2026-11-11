@@ -1,36 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-interface SSEClient {
-    id: number;
-    controller: ReadableStreamDefaultController<string>;
-}
-
-let clients: SSEClient[] = [];
-
-export function GET(req: NextRequest) {
-    const stream = new ReadableStream({
-        start(controller) {
-            const clientId = Date.now();
-            const client = { id: clientId, controller };
-
-            clients.push(client);
-
-            req.signal.onabort = () => {
-                clients = clients.filter(c => c.id !== clientId);
-            };
-        }
-    });
-
-    return new NextResponse(stream, {
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*'
-        }
-    });
-}
-
 // endpoint to receive pub/sub messages
 export async function POST(req: NextRequest) {
 

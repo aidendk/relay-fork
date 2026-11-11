@@ -1,7 +1,9 @@
 // schema.prisma
 datasource db {
   provider = "postgresql"
-  url      = env("POSTGRES_URL")
+  url       = env("POSTGRES_URL")
+  // Migrations need a direct (non-pooled) connection; advisory locks hang behind the pooler
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 generator client {
@@ -56,6 +58,13 @@ model Order {
   notified         Boolean     @default(false)
   deliveryLocation String?
   deliveryPhotoUrl String?
+  // Car the order is for, e.g. "AME27" (season runs June–May). The app always sets it;
+  // the DB default (current season, UTC) only backs up inserts that don't.
+  // Text matches Postgres's normalized form so Prisma sees no drift.
+  carYear          String      @default(dbgenerated("('AME'::text || (((EXTRACT(year FROM timezone('UTC'::text, now())))::integer % 100) +\nCASE\n    WHEN (EXTRACT(month FROM timezone('UTC'::text, now())) >= (6)::numeric) THEN 1\n    ELSE 0\nEND))"))
+  trouble          Boolean     @default(false) // Flagged: no update in a long time
+
+  @@index([carYear])
 }
 
 enum OrderStatus {

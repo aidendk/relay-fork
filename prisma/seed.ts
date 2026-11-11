@@ -3,6 +3,9 @@ import { PrismaClient, Role, OrderStatus, ItemStatus } from '@prisma/client';
 import 'dotenv/config';
 const prisma = new PrismaClient();
 
+// Season runs June to May and is named after the car: June 2026 – May 2027 is AME27.
+const carYearFor = (d: Date) => `AME${(d.getUTCFullYear() % 100) + (d.getUTCMonth() >= 5 ? 1 : 0)}`;
+
 async function main() {
   // Generate test orders before and after the AME27 budget start date.
   function getRandomDate() {
@@ -57,6 +60,7 @@ async function main() {
           [user.subteam]: 100,
         },
         createdAt: createdAt,
+        carYear: carYearFor(createdAt),
         items: {
           create: [
             {

@@ -4,6 +4,7 @@ import { mutate } from 'swr';
 import { useToast } from '../toast/use-toast';
 import { upload } from '@vercel/blob/client';
 import { useSession } from 'next-auth/react';
+import { CAR_YEARS, CURRENT_CAR_YEAR } from '../../lib/car-year';
 import { FileSpreadsheet, FileText, Link2, ListPlus, Package, Plus, Upload, X } from 'lucide-react';
 
 const STEPS = ['Order details', 'Cost split', 'How to submit', 'Items'];
@@ -74,6 +75,7 @@ interface OrderData {
     };
     supportingDocs: { name: string; url: string }[];
     deliveryLocation: string;
+    carYear: string;
 }
 
 export default function OrderForm({ onClose }: OrderFormProps) {
@@ -104,6 +106,7 @@ export default function OrderForm({ onClose }: OrderFormProps) {
         },
         supportingDocs: [],
         deliveryLocation: '',
+        carYear: CURRENT_CAR_YEAR,
     });
 
     const handleNext = () => setCurrentScreen(currentScreen + 1);
@@ -142,6 +145,7 @@ export default function OrderForm({ onClose }: OrderFormProps) {
         formData.append('estimatedCost', String(orderData.estimatedCost));
         formData.append('userEmail', email || '');
         formData.append('deliveryLocation', orderData.deliveryLocation);
+        formData.append('carYear', orderData.carYear);
         for (const [key, value] of Object.entries(orderData.costBreakdown)) {
             formData.append(`costBreakdown[${key}]`, String(value));
         }
@@ -170,7 +174,7 @@ export default function OrderForm({ onClose }: OrderFormProps) {
                         variant: "affirmation",
                     });
                     mutate((key: string) => typeof key === 'string' && key.startsWith('/api/orders'));
-                    mutate('/api/finance');
+                    mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
                     onClose();
                 }
             } else {
@@ -423,6 +427,19 @@ function GeneralInfoScreen({ orderData, onInputChange, onNext, onClose, setOrder
                             <option value='USB'>USB</option>
                             <option value='Thompson'>Thompson</option>
                             <option value='Other'>Other…</option>
+                        </select>
+                    </div>
+                    <div className={styles.field}>
+                        <label htmlFor="of-car-year">Car <span className={styles.required}>*</span></label>
+                        <select
+                            id="of-car-year"
+                            name="carYear"
+                            value={orderData.carYear}
+                            onChange={onInputChange}
+                        >
+                            {CAR_YEARS.map((year) => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
                         </select>
                     </div>
                     {showCustomDelivery && (
@@ -693,7 +710,7 @@ function CartLinkOrder({ orderData, onBack, onClose, onOverbudget }: CartLinkOrd
                         variant: "affirmation",
                     });
                     mutate((key: string) => typeof key === 'string' && key.startsWith('/api/orders'));
-                    mutate('/api/finance');
+                    mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
                     onClose();
                 }
             } else {
@@ -808,7 +825,7 @@ function SingleItemOrder({ orderData, onBack, onClose, onOverbudget }: SingleIte
                         variant: "affirmation",
                     });
                     mutate((key: string) => typeof key === 'string' && key.startsWith('/api/orders'));
-                    mutate('/api/finance');
+                    mutate((key) => typeof key === 'string' && key.startsWith('/api/finance'));
                     onClose();
                 }
             } else {
@@ -918,6 +935,7 @@ function TemplateEntryForm({ orderData, onBack, onClose, onOverbudget }: {
         formData.append("estimatedCost", String(orderData.estimatedCost));
         formData.append("userEmail", email || "");
         formData.append("deliveryLocation", orderData.deliveryLocation);
+        formData.append("carYear", orderData.carYear);
 
         for (const [key, value] of Object.entries(orderData.costBreakdown)) {
             formData.append(`costBreakdown[${key}]`, String(value));
